@@ -30,6 +30,10 @@ async function inquire() {
       return !val || new RegExp(/^\d+(\.\d+)*$/g).test(val);
     },
   }, {
+    name: "isTypescript",
+    message: "Have extension be in typescript:",
+    type: "confirm",
+  }, {
     name: "useBackgroundScript",
     message: "Include background script:",
     type: "confirm",
@@ -48,10 +52,6 @@ async function inquire() {
   }, {
     name: "useOptionsPage",
     message: "Include options page:",
-    type: "confirm",
-  }, {
-    name: "isTypescript",
-    message: "Have extension be in typescript:",
     type: "confirm",
   }]);
 
@@ -76,33 +76,35 @@ function generateManifestText(args: Arguments) {
   };
 
   if (args.useBackgroundScript) {
-    manifest.background = { page: "src/background/background.html" };
+    manifest.background = { page: "src/background/index.html" };
   }
 
   if (args.useContentScript) {
     manifest.content_scripts = [{
       matches: ["https://deno.land/"],
-      js: `src/content/content.${args.isTypescript ? "ts" : "js"}`,
+      js: [`src/content/index.${args.isTypescript ? "ts" : "js"}`],
     }];
   }
 
-  // TODO Check if popups require scripts
+  // TODO Check if popups require icons
   if (args.useBrowserPopupScript) {
     manifest.browser_action = {
-      default_popup: "src/popups/browser_popup.html",
+      default_popup: "src/browserAction/index.html",
       default_title: args.name,
     };
   }
 
   if (args.usePagePopupScript) {
     manifest.page_action = {
-      default_popup: "src/popups/browser_popup.html",
+      default_popup: "src/pageAction/index.html",
       default_title: args.name,
+      browser_style: true,
+      show_matches: ["https://deno.land/"],
     };
   }
 
   if (args.useOptionsPage) {
-    manifest.options_ui = { page: "src/options/options.html" };
+    manifest.options_ui = { page: "src/options/index.html" };
   }
 
   // writeJsonSync(`${args.name}/manifest.json`, manifest, {});
@@ -115,7 +117,39 @@ function generateManifestText(args: Arguments) {
  * @param args The arguments deciding which scripts to create
  */
 function createScripts(args: Arguments) {
-  console.log(args);
+  const parentDir = `${args.name}/src/`;
+
+  const scriptSuffix = args.isTypescript ? ".ts" : ".js";
+  // TODO check how to have this work on outside project
+  const htmlPath = args.isTypescript ? "indexTS.html" : "index.html";
+
+  Deno.mkdirSync(parentDir);
+
+  const writeScripts = (dirName: string) => {
+    const dir = `${parentDir}${dirName}`;
+    Deno.mkdirSync(dir);
+    Deno.createSync(`${dir}/index${scriptSuffix}`);
+    Deno.copyFileSync(htmlPath, `${dir}/index.html`);
+  };
+
+  if (args.useBackgroundScript) {
+    writeScripts("background");
+  }
+
+  if (args.useContentScript) {
+    Deno.mkdirSync(`${parentDir}/content`);
+    Deno.createSync(`${parentDir}content/index${scriptSuffix}`);
+  }
+
+  if (args.useBrowserPopupScript) {
+    writeScripts("browserAction");
+  }
+  if (args.usePagePopupScript) {
+    writeScripts("pageAction");
+  }
+  if (args.useOptionsPage) {
+    writeScripts("options");
+  }
 }
 
 /**
@@ -130,14 +164,16 @@ function createFiles(args: Arguments) {
   Deno.writeTextFileSync(`${args.name}/manifest.json`, manifestText);
 
   createScripts(args);
-
-  console.log(args);
 }
 
 async function main() {
   const args = await inquire();
 
+  console.log(args);
+
   createFiles(args);
+
+  console.log(`Extension ${args.name} Complete`);
 }
 
 main().catch((e) => {
