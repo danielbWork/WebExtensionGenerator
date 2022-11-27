@@ -1,6 +1,10 @@
 // import yargs from "https://cdn.deno.land/yargs/versions/yargs-v16.2.1-deno/raw/deno.ts";
 import Ask from "https://deno.land/x/ask@1.0.6/mod.ts";
 import { Arguments } from "./Arguments.ts";
+
+const REPO_URL =
+  "https://raw.githubusercontent.com/danielbWork/WebExtensionGenerator/main/";
+
 /**
  * Asks the user about the various settings for the extension
  * @returns The answers of the user
@@ -113,15 +117,30 @@ function generateManifestText(args: Arguments) {
 }
 
 /**
+ * Loads a raw file from the app's repo and returns it's contents
+ * @param file The file we get the text of
+ * @returns The text in the file
+ */
+async function loadFileText(file: string) {
+  const response = await fetch(REPO_URL + file);
+
+  const fileText = await response.text();
+
+  return fileText;
+}
+
+/**
  * Creates the scripts for the extension
  * @param args The arguments deciding which scripts to create
  */
-function createScripts(args: Arguments) {
+async function createScripts(args: Arguments) {
   const parentDir = `${args.name}/src/`;
 
   const scriptSuffix = args.isTypescript ? ".ts" : ".js";
-  // TODO check how to have this work on outside project
-  const htmlPath = args.isTypescript ? "indexTS.html" : "index.html";
+
+  const fileText = await loadFileText(
+    args.isTypescript ? "indexTS.html" : "index.html",
+  );
 
   Deno.mkdirSync(parentDir);
 
@@ -129,9 +148,9 @@ function createScripts(args: Arguments) {
     const dir = `${parentDir}${dirName}`;
     Deno.mkdirSync(dir);
     Deno.createSync(`${dir}/index${scriptSuffix}`);
-    Deno.copyFileSync(htmlPath, `${dir}/index.html`);
+    Deno.writeTextFileSync(`${dir}/index.html`, fileText);
   };
-
+  fileText;
   if (args.useBackgroundScript) {
     writeScripts("background");
   }
@@ -156,14 +175,14 @@ function createScripts(args: Arguments) {
  * Creates the various files of the extension
  * @param args The arguments we base the create files with
  */
-function createFiles(args: Arguments) {
+async function createFiles(args: Arguments) {
   Deno.mkdirSync(args.name);
 
   const manifestText = generateManifestText(args);
 
   Deno.writeTextFileSync(`${args.name}/manifest.json`, manifestText);
 
-  createScripts(args);
+  await createScripts(args);
 }
 
 /**
@@ -179,7 +198,9 @@ async function setupTypescript(args: Arguments) {
   await init.status();
   init.close();
 
-  Deno.copyFileSync("tsconfig.json", `${args.name}/tsconfig.json`);
+  const tsConfigText = await loadFileText("tsconfig.json");
+
+  await Deno.writeTextFile(`${args.name}/tsconfig.json`, tsConfigText);
 
   const packageFile = Deno.readTextFileSync(`${args.name}/package.json`);
   const packageObject = JSON.parse(packageFile);
@@ -248,7 +269,7 @@ async function setupTypescript(args: Arguments) {
 try {
   const args = await inquire();
 
-  createFiles(args);
+  await createFiles(args);
 
   if (args.isTypescript) {
     await setupTypescript(args);
