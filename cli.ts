@@ -67,11 +67,11 @@ async function inquire() {
 function generateManifestText(args: Arguments) {
   // deno-lint-ignore no-explicit-any
   const manifest: any = {
-    manifest_version: 3,
+    manifest_version: 2,
     name: args.name,
     description: args.description,
     version: args.version,
-    icons: {}, // TODO Maybe add custom icons
+    icons: {},
     permissions: [],
   };
 
@@ -166,19 +166,98 @@ function createFiles(args: Arguments) {
   createScripts(args);
 }
 
-async function main() {
-  const args = await inquire();
+/**
+ * Adds everything needed to make project into typescript
+ * @param args The arguments regarding the web extension
+ */
+async function setupTypescript(args: Arguments) {
+  const init = Deno.run({
+    cmd: ["npm", "init", "-y"],
+    cwd: args.name,
+    stdout: "null",
+  });
+  await init.status();
+  init.close();
 
-  console.log(args);
+  Deno.copyFileSync("tsconfig.json", `${args.name}/tsconfig.json`);
+
+  const packageFile = Deno.readTextFileSync(`${args.name}/package.json`);
+  const packageObject = JSON.parse(packageFile);
+  packageObject.name = args.name;
+  packageObject.description = args.description;
+  packageObject.version = args.version;
+
+  packageObject.scripts = {
+    start:
+      "parcel manifest.json --host localhost --config @parcel/config-webextension --target webext-dev",
+    build:
+      "parcel build manifest.json --config @parcel/config-webextension --target webext-prod",
+  };
+
+  packageObject.targets = {
+    "webext-dev": {},
+    "webext-prod": {},
+  };
+
+  // Adds necessary changes in package.json
+  Deno.writeTextFileSync(
+    `${args.name}/package.json`,
+    JSON.stringify(packageObject, null, "\t"),
+  );
+
+  const installDependencies = Deno.run({
+    cmd: [
+      "npm",
+      "i",
+      "typescript",
+      "web-ext",
+      "webextension-polyfill",
+      "--save",
+    ],
+    cwd: args.name,
+  });
+  await installDependencies.status();
+  installDependencies.close();
+
+  const installDevDependencies = Deno.run({
+    cmd: [
+      "npm",
+      "i",
+      "parcel",
+      "@parcel/config-webextension",
+      "@types/webextension-polyfill",
+      "--save-dev",
+    ],
+    cwd: args.name,
+  });
+  await installDevDependencies.status();
+  installDevDependencies.close();
+
+  const build = Deno.run({
+    cmd: [
+      "npm",
+      "run",
+      "build",
+    ],
+    cwd: args.name,
+  });
+  await build.status();
+  build.close();
+}
+
+try {
+  const args = await inquire();
 
   createFiles(args);
 
-  console.log(`Extension ${args.name} Complete`);
-}
+  if (args.isTypescript) {
+    await setupTypescript(args);
+  }
 
-main().catch((e) => {
-  console.log(e);
-});
+  console.log(`Extension ${args.name} Complete`);
+} catch (error) {
+  console.log(error);
+}
 
 // const inputArgs: Arguments = yargs(Deno.args)
 // .command()
