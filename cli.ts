@@ -1,66 +1,230 @@
-// import yargs from "https://cdn.deno.land/yargs/versions/yargs-v16.2.1-deno/raw/deno.ts";
+import yargs from "https://deno.land/x/yargs@v17.6.2-deno/deno.ts";
 import Ask from "https://deno.land/x/ask@1.0.6/mod.ts";
 import { Arguments } from "./Arguments.ts";
+import { NumberOpts } from "https://deno.land/x/ask@1.0.6/src/types/number.ts";
+import { ConfirmOpts } from "https://deno.land/x/ask@1.0.6/src/types/confirm.ts";
+import { PromptOpts } from "https://deno.land/x/ask@1.0.6/src/core/prompt.ts";
 
 const REPO_URL =
   "https://raw.githubusercontent.com/danielbWork/WebExtensionGenerator/main/";
 
+const DEFAULT_ARGUMENTS: Arguments = {
+  name: "MyExtension",
+  description: "Creates world peace",
+  version: "1.0.0",
+  useBackgroundScript: false,
+  useContentScript: false,
+  useBrowserPopupScript: false,
+  usePagePopupScript: false,
+  useOptionsPage: false,
+  isTypescript: false,
+  outputDir: "./",
+};
+
+/**
+ * @returns The parsed arguments passed to the commend by the user
+ */
+function parseInputArgs() {
+  const inputArgs = yargs(Deno.args).command(
+    "webExtensionGenerator",
+    "Generates a webextension",
+  ).option("name", {
+    alias: "n",
+    type: "string",
+    description: "Name for the webextension. If not entered shows prompt.",
+  }).option("description", {
+    alias: "d",
+    type: "string",
+    description:
+      "Description for the webextension. If not entered shows prompt",
+  }).option("ext-version", {
+    type: "string",
+    description: "Version for the webextension. If not entered shows prompt",
+  }).option("background", {
+    alias: "b",
+    default: false,
+    type: "boolean",
+    description: "Adds background script. If not entered shows prompt",
+  }).option("content", {
+    alias: "c",
+    default: false,
+    type: "boolean",
+    description: "Adds content script. If not entered shows prompt",
+  }).option("browser-popup", {
+    type: "boolean",
+    default: false,
+    description: "Adds browser popup script. If not entered shows prompt",
+  }).option("page-popup", {
+    type: "boolean",
+    default: false,
+    description: "Adds page popup script. If not entered shows prompt",
+  }).option("options-page", {
+    alias: "o",
+    default: false,
+    type: "boolean",
+    description: "Adds options page. If not entered shows prompt",
+  }).option("typescript", {
+    alias: "t",
+    default: false,
+    type: "boolean",
+    description: "Makes application type script. If not entered shows prompt",
+  }).option("disable-prompt", {
+    type: "boolean",
+    description:
+      "Disables prompts from displaying taking only values given by command, and entering default values for params not passed in the command",
+  }).option("output-dir", {
+    alias: "w",
+    type: "string",
+    description:
+      "The folder to output the extension in if not passed uses current dir",
+    default: "./",
+  }).parse();
+  return inputArgs;
+}
+
+/**
+ * Creates default arguments based on the the user input
+ * @param inputArgs The arguments passed by the user
+ */
+function generateArgsByCommands(
+  inputArgs: {
+    name?: string;
+    description?: string;
+    extVersion?: string;
+    background: boolean;
+    content: boolean;
+    browserPopup: boolean;
+    pagePopup: boolean;
+    optionsPage: boolean;
+    typescript: boolean;
+    outputDir: string;
+  },
+) {
+  const args: Arguments = {
+    name: inputArgs.name || DEFAULT_ARGUMENTS.name,
+    description: inputArgs.description || DEFAULT_ARGUMENTS.description,
+    version: inputArgs.extVersion || DEFAULT_ARGUMENTS.version,
+    useBackgroundScript: inputArgs.background,
+    useContentScript: inputArgs.content,
+    useBrowserPopupScript: inputArgs.browserPopup,
+    usePagePopupScript: inputArgs.pagePopup,
+    useOptionsPage: inputArgs.optionsPage,
+    isTypescript: inputArgs.typescript,
+    outputDir: inputArgs.outputDir,
+  };
+
+  return args;
+}
+
 /**
  * Asks the user about the various settings for the extension
+ * @param inputArgs info inputted by that shouldn't be asked about
  * @returns The answers of the user
  */
-async function inquire() {
+async function inquire(inputArgs: {
+  name?: string;
+  description?: string;
+  extVersion?: string;
+  background: boolean;
+  content: boolean;
+  browserPopup: boolean;
+  pagePopup: boolean;
+  optionsPage: boolean;
+  typescript: boolean;
+  outputDir: string;
+}) {
   const ask = new Ask();
 
-  const answers = await ask.prompt([{
-    name: "name",
-    message: "Extension name:",
-    type: "input",
-    default: "MyExtension",
-    validate: (val) => {
-      return !val || val.trim() !== "";
-    },
-  }, {
-    name: "description",
-    message: "Description:",
-    type: "input",
-    default: "Creates world peace",
-  }, {
-    name: "version",
-    message: "Version:",
-    type: "input",
-    default: "1.0.0",
-    validate: (val) => {
-      return !val || new RegExp(/^\d+(\.\d+)*$/g).test(val);
-    },
-  }, {
-    name: "isTypescript",
-    message: "Have extension be in typescript:",
-    type: "confirm",
-  }, {
-    name: "useBackgroundScript",
-    message: "Include background script:",
-    type: "confirm",
-  }, {
-    name: "useContentScript",
-    message: "Include content script:",
-    type: "confirm",
-  }, {
-    name: "useBrowserPopupScript",
-    message: "Include browser action popup script:",
-    type: "confirm",
-  }, {
-    name: "usePagePopupScript",
-    message: "Include page action popup script:",
-    type: "confirm",
-  }, {
-    name: "useOptionsPage",
-    message: "Include options page:",
-    type: "confirm",
-  }]);
+  const questions: (PromptOpts | ConfirmOpts | NumberOpts)[] = [];
+  const args = generateArgsByCommands(inputArgs);
+
+  if (!inputArgs.name) {
+    questions.push({
+      name: "name",
+      message: "Extension name:",
+      type: "input",
+      default: DEFAULT_ARGUMENTS.name,
+      validate: (val) => {
+        return !val || val.trim() !== "";
+      },
+    });
+  }
+
+  if (!inputArgs.description) {
+    questions.push({
+      name: "description",
+      message: "Description:",
+      type: "input",
+      default: DEFAULT_ARGUMENTS.description,
+    });
+  }
+
+  if (!inputArgs.extVersion) {
+    questions.push({
+      name: "version",
+      message: "Version:",
+      type: "input",
+      default: DEFAULT_ARGUMENTS.version,
+      validate: (val) => {
+        return !val || new RegExp(/^\d+(\.\d+)*$/g).test(val);
+      },
+    });
+  }
+
+  if (!inputArgs.typescript) {
+    questions.push({
+      name: "isTypescript",
+      message: "Have extension be in typescript:",
+      type: "confirm",
+    });
+  }
+
+  if (!inputArgs.background) {
+    questions.push({
+      name: "useBackgroundScript",
+      message: "Include background script:",
+      type: "confirm",
+    });
+  }
+
+  if (!inputArgs.content) {
+    questions.push({
+      name: "useContentScript",
+      message: "Include content script:",
+      type: "confirm",
+    });
+  }
+
+  if (!inputArgs.browserPopup) {
+    questions.push({
+      name: "useBrowserPopupScript",
+      message: "Include browser action popup script:",
+      type: "confirm",
+    });
+  }
+
+  if (!inputArgs.pagePopup) {
+    questions.push({
+      name: "usePagePopupScript",
+      message: "Include page action popup script:",
+      type: "confirm",
+    });
+  }
+
+  if (!inputArgs.optionsPage) {
+    questions.push({
+      name: "useOptionsPage",
+      message: "Include options page:",
+      type: "confirm",
+    });
+  }
+
+  let answers = {};
+
+  answers = await ask.prompt(questions);
 
   // Does conversion for linter
-  return (answers as unknown as Arguments);
+  return { ...args, ...answers };
 }
 
 /**
@@ -134,7 +298,9 @@ async function loadFileText(file: string) {
  * @param args The arguments deciding which scripts to create
  */
 async function createScripts(args: Arguments) {
-  const parentDir = `${args.name}/src/`;
+  const extensionDir = args.outputDir + args.name;
+
+  const parentDir = `${extensionDir}/src/`;
 
   const scriptSuffix = args.isTypescript ? ".ts" : ".js";
 
@@ -176,11 +342,16 @@ async function createScripts(args: Arguments) {
  * @param args The arguments we base the create files with
  */
 async function createFiles(args: Arguments) {
-  Deno.mkdirSync(args.name);
+  const extensionDir = args.outputDir + args.name;
+
+  Deno.mkdirSync(extensionDir, { recursive: true });
 
   const manifestText = generateManifestText(args);
 
-  Deno.writeTextFileSync(`${args.name}/manifest.json`, manifestText);
+  Deno.writeTextFileSync(
+    `${extensionDir}/manifest.json`,
+    manifestText,
+  );
 
   await createScripts(args);
 }
@@ -190,9 +361,11 @@ async function createFiles(args: Arguments) {
  * @param args The arguments regarding the web extension
  */
 async function setupTypescript(args: Arguments) {
+  const extensionDir = args.outputDir + args.name;
+
   const init = Deno.run({
     cmd: ["npm", "init", "-y"],
-    cwd: args.name,
+    cwd: extensionDir,
     stdout: "null",
   });
   await init.status();
@@ -200,9 +373,12 @@ async function setupTypescript(args: Arguments) {
 
   const tsConfigText = await loadFileText("tsconfig.json");
 
-  await Deno.writeTextFile(`${args.name}/tsconfig.json`, tsConfigText);
+  await Deno.writeTextFile(
+    `${extensionDir}/tsconfig.json`,
+    tsConfigText,
+  );
 
-  const packageFile = Deno.readTextFileSync(`${args.name}/package.json`);
+  const packageFile = Deno.readTextFileSync(`${extensionDir}/package.json`);
   const packageObject = JSON.parse(packageFile);
   packageObject.name = args.name;
   packageObject.description = args.description;
@@ -222,7 +398,7 @@ async function setupTypescript(args: Arguments) {
 
   // Adds necessary changes in package.json
   Deno.writeTextFileSync(
-    `${args.name}/package.json`,
+    `${extensionDir}/package.json`,
     JSON.stringify(packageObject, null, "\t"),
   );
 
@@ -235,7 +411,7 @@ async function setupTypescript(args: Arguments) {
       "webextension-polyfill",
       "--save",
     ],
-    cwd: args.name,
+    cwd: extensionDir,
   });
   await installDependencies.status();
   installDependencies.close();
@@ -249,7 +425,7 @@ async function setupTypescript(args: Arguments) {
       "@types/webextension-polyfill",
       "--save-dev",
     ],
-    cwd: args.name,
+    cwd: extensionDir,
   });
   await installDevDependencies.status();
   installDevDependencies.close();
@@ -260,14 +436,27 @@ async function setupTypescript(args: Arguments) {
       "run",
       "build",
     ],
-    cwd: args.name,
+    cwd: extensionDir,
   });
   await build.status();
   build.close();
 }
 
 try {
-  const args = await inquire();
+  const inputArgs = parseInputArgs();
+
+  let args;
+
+  // Checks if we just use default values or no
+  if (inputArgs.disablePrompt) {
+    args = generateArgsByCommands(inputArgs);
+  } else {
+    args = await inquire(inputArgs);
+  }
+
+  if (!args.outputDir.endsWith("/")) {
+    args.outputDir = args.outputDir + "/";
+  }
 
   await createFiles(args);
 
@@ -279,14 +468,3 @@ try {
 } catch (error) {
   console.log(error);
 }
-
-// const inputArgs: Arguments = yargs(Deno.args)
-// .command()
-//   .alias("n", "name")
-//   .alias("d", "description")
-//   .alias("b", "backgroundPage")
-//   .alias("p", "browserPopupPage")
-//   .alias("u", "pagePopupPage")
-//   .alias("c", "contentScriptUrl").argv;
-
-// console.log(inputArgs);

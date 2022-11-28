@@ -46,4 +46,9 @@ export interface Arguments {
    * Whether or not the extension should be written in typescript or javascript
    */
   isTypescript: boolean;
+
+  /**
+   * Where we put the extension
+   */
+  outputDir: string;
 }
